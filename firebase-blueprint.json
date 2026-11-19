@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private student settings and profile stored under /users/{userId}",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "defaultRequiredPercent": { "type": "number" },
+        "seededDemoData": { "type": "boolean" },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "displayName", "email", "defaultRequiredPercent", "seededDemoData", "createdAt", "updatedAt"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "A college course with attendance counts and target percentage",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "conducted": { "type": "integer" },
+        "attended": { "type": "integer" },
+        "requiredPercent": { "type": "number" },
+        "colorIndex": { "type": "integer" },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "name", "code", "conducted", "attended", "requiredPercent", "colorIndex", "createdAt", "updatedAt"]
+    },
+    "TimetableSlot": {
+      "title": "TimetableSlot",
+      "description": "A scheduled subject slot in the Monday-Saturday weekly timetable",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "dayOfWeek": { "type": "integer" },
+        "periodIndex": { "type": "integer" },
+        "timeSlot": { "type": "string" },
+        "periodsCount": { "type": "integer" },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "subjectId", "dayOfWeek", "periodIndex", "timeSlot", "periodsCount", "createdAt", "updatedAt"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "A single attendance log entry keyed by date, subject, and period to prevent duplicates",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "dateIso": { "type": "string" },
+        "periodIndex": { "type": "integer" },
+        "periodsCount": { "type": "integer" },
+        "status": {
+          "type": "string",
+          "enum": ["PRESENT", "ABSENT", "CANCELLED"]
+        },
+        "note": { "type": "string" },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "subjectId", "dateIso", "periodIndex", "periodsCount", "status", "note", "createdAt", "updatedAt"]
+    },
+    "Holiday": {
+      "title": "Holiday",
+      "description": "A college holiday date where classes are not counted as conducted",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateIso": { "type": "string" },
+        "reason": { "type": "string" },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "dateIso", "reason", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private student settings document"
+    },
+    "/users/{userId}/subjects/{subjectId}": {
+      "schema": { "$ref": "#/entities/Subject" },
+      "description": "Student's enrolled subjects and cumulative counts"
+    },
+    "/users/{userId}/timetable/{slotId}": {
+      "schema": { "$ref": "#/entities/TimetableSlot" },
+      "description": "Student's Monday-Saturday timetable schedule"
+    },
+    "/users/{userId}/attendance/{recordId}": {
+      "schema": { "$ref": "#/entities/AttendanceRecord" },
+      "description": "Student's daily attendance records"
+    },
+    "/users/{userId}/holidays/{dateIso}": {
+      "schema": { "$ref": "#/entities/Holiday" },
+      "description": "Student's marked college holidays"
+    }
+  }
+}

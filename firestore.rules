@@ -1,0 +1,193 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HARDENED HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.displayName is string && data.displayName.size() >= 0 && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() >= 0 && data.email.size() <= 160 &&
+             (data.defaultRequiredPercent is number) &&
+             data.defaultRequiredPercent >= 1 && data.defaultRequiredPercent <= 100 &&
+             data.seededDemoData is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSubject(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             data.code is string && data.code.size() >= 1 && data.code.size() <= 24 &&
+             data.conducted is int && data.conducted >= 0 && data.conducted <= 10000 &&
+             data.attended is int && data.attended >= 0 && data.attended <= data.conducted &&
+             (data.requiredPercent is number) &&
+             data.requiredPercent >= 1 && data.requiredPercent <= 100 &&
+             data.colorIndex is int && data.colorIndex >= 0 && data.colorIndex <= 20 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidTimetableSlot(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             isValidId(data.subjectId) &&
+             data.dayOfWeek is int && data.dayOfWeek >= 1 && data.dayOfWeek <= 6 &&
+             data.periodIndex is int && data.periodIndex >= 1 && data.periodIndex <= 12 &&
+             data.timeSlot is string && data.timeSlot.size() >= 1 && data.timeSlot.size() <= 40 &&
+             data.periodsCount is int && data.periodsCount >= 1 && data.periodsCount <= 6 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAttendanceRecord(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             isValidId(data.subjectId) &&
+             data.dateIso is string && data.dateIso.size() == 10 && data.dateIso.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.periodIndex is int && data.periodIndex >= 1 && data.periodIndex <= 12 &&
+             data.periodsCount is int && data.periodsCount >= 1 && data.periodsCount <= 6 &&
+             data.status in ['PRESENT', 'ABSENT', 'CANCELLED'] &&
+             data.note is string && data.note.size() <= 160 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidHoliday(data, userId, dateIsoId) {
+      return data.userId is string && data.userId == userId &&
+             data.dateIso is string && data.dateIso == dateIsoId &&
+             data.dateIso.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 80 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- USER PROFILE & SETTINGS ---
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'email', 'defaultRequiredPercent', 'seededDemoData', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'defaultRequiredPercent', 'seededDemoData', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'defaultRequiredPercent', 'seededDemoData', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // --- SUBJECTS SUBCOLLECTION ---
+      match /subjects/{subjectId} {
+        allow get: if isOwner(userId) && isValidId(subjectId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(subjectId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'code', 'conducted', 'attended', 'requiredPercent', 'colorIndex', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'code', 'conducted', 'attended', 'requiredPercent', 'colorIndex', 'createdAt', 'updatedAt']) &&
+                         isValidSubject(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(subjectId) &&
+                         isValidSubject(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'code', 'conducted', 'attended', 'requiredPercent', 'colorIndex', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(subjectId);
+      }
+
+      // --- TIMETABLE SUBCOLLECTION ---
+      match /timetable/{slotId} {
+        allow get: if isOwner(userId) && isValidId(slotId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(slotId) &&
+                         incoming().keys().hasAll(['userId', 'subjectId', 'dayOfWeek', 'periodIndex', 'timeSlot', 'periodsCount', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'subjectId', 'dayOfWeek', 'periodIndex', 'timeSlot', 'periodsCount', 'createdAt', 'updatedAt']) &&
+                         isValidTimetableSlot(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(slotId) &&
+                         isValidTimetableSlot(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['subjectId', 'dayOfWeek', 'periodIndex', 'timeSlot', 'periodsCount', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(slotId);
+      }
+
+      // --- ATTENDANCE RECORDS SUBCOLLECTION ---
+      match /attendance/{recordId} {
+        allow get: if isOwner(userId) && isValidId(recordId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(recordId) &&
+                         incoming().keys().hasAll(['userId', 'subjectId', 'dateIso', 'periodIndex', 'periodsCount', 'status', 'note', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'subjectId', 'dateIso', 'periodIndex', 'periodsCount', 'status', 'note', 'createdAt', 'updatedAt']) &&
+                         isValidAttendanceRecord(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(recordId) &&
+                         isValidAttendanceRecord(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'periodsCount', 'note', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(recordId);
+      }
+
+      // --- HOLIDAYS SUBCOLLECTION ---
+      match /holidays/{dateIso} {
+        allow get: if isOwner(userId) && isValidId(dateIso);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(dateIso) &&
+                         incoming().keys().hasAll(['userId', 'dateIso', 'reason', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'dateIso', 'reason', 'createdAt', 'updatedAt']) &&
+                         isValidHoliday(incoming(), userId, dateIso);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(dateIso) &&
+                         isValidHoliday(incoming(), userId, dateIso) &&
+                         incoming().userId == existing().userId &&
+                         incoming().dateIso == existing().dateIso &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['reason', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(dateIso);
+      }
+    }
+  }
+}
